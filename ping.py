@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding: utf8
 
 """
     A pure python ping implementation using raw socket.
@@ -61,6 +62,10 @@
     Changed receive response to not accept ICMP request messages.
     It was possible to receive the very request that was sent.
 
+    January 15, 2017
+    Python 3 asyncio adaptation.
+    Anton Belousov / Stellarbit LLC
+
     Last commit info:
     ~~~~~~~~~~~~~~~~~
     $LastChangedDate: $
@@ -68,8 +73,14 @@
     $Author: $
 """
 
-
-import os, sys, socket, struct, select, time
+import asyncio
+import async_timeout
+import aiodns
+import os
+import sys
+import socket
+import struct
+import time
 
 if sys.platform == "win32":
     # On Windows, the best timer is time.clock()
@@ -82,28 +93,31 @@ else:
 ICMP_ECHO_REQUEST = 8 # Seems to be the same on Solaris.
 
 
-def checksum(source_string):
+def checksum(buffer):
     """
     I'm not too confident that this is right but testing seems
     to suggest that it gives the same answers as in_cksum in ping.c
+    :param buffer:
+    :return:
     """
     sum = 0
-    countTo = (len(source_string)/2)*2
+    count_to = (len(buffer) / 2) * 2
     count = 0
-    while count<countTo:
-        thisVal = ord(source_string[count + 1])*256 + ord(source_string[count])
-        sum = sum + thisVal
-        sum = sum & 0xffffffff # Necessary?
-        count = count + 2
 
-    if countTo<len(source_string):
-        sum = sum + ord(source_string[len(source_string) - 1])
-        sum = sum & 0xffffffff # Necessary?
+    while count < count_to:
+        this_val = buffer[count + 1] * 256 + buffer[count]
+        sum += this_val
+        sum &= 0xffffffff # Necessary?
+        count += 2
 
-    sum = (sum >> 16)  +  (sum & 0xffff)
-    sum = sum + (sum >> 16)
+    if count_to < len(buffer):
+        sum += buffer[len(buffer) - 1]
+        sum &= 0xffffffff # Necessary?
+
+    sum = (sum >> 16) + (sum & 0xffff)
+    sum += sum >> 16
     answer = ~sum
-    answer = answer & 0xffff
+    answer &= 0xffff
 
     # Swap bytes. Bugger me if I know why.
     answer = answer >> 8 | (answer << 8 & 0xff00)
@@ -111,51 +125,61 @@ def checksum(source_string):
     return answer
 
 
-def receive_one_ping(my_socket, ID, timeout):
+async def receive_one_ping(my_socket, id_, timeout):
     """
     receive the ping from the socket.
+    :param my_socket:
+    :param id_:
+    :param timeout:
+    :return:
     """
-    timeLeft = timeout
-    while True:
-        startedSelect = default_timer()
-        whatReady = select.select([my_socket], [], [], timeLeft)
-        howLongInSelect = (default_timer() - startedSelect)
-        if whatReady[0] == []: # Timeout
-            return
+    loop = asyncio.get_event_loop()
 
-        timeReceived = default_timer()
-        recPacket, addr = my_socket.recvfrom(1024)
-        icmpHeader = recPacket[20:28]
-        type, code, checksum, packetID, sequence = struct.unpack(
-            "bbHHh", icmpHeader
-        )
-        # Filters out the echo request itself. 
-        # This can be tested by pinging 127.0.0.1 
-        # You'll see your own request
-        if type != 8 and packetID == ID:
-            bytesInDouble = struct.calcsize("d")
-            timeSent = struct.unpack("d", recPacket[28:28 + bytesInDouble])[0]
-            return timeReceived - timeSent
+    try:
+        with async_timeout.timeout(timeout):
+            rec_packet = await loop.sock_recv(my_socket, 1024)
+            time_received = default_timer()
+            icmp_header = rec_packet[20:28]
 
-        timeLeft = timeLeft - howLongInSelect
-        if timeLeft <= 0:
-            return
+            type, code, checksum, packet_id, sequence = struct.unpack(
+                "bbHHh", icmp_header
+            )
+
+            # Filters out the echo request itself.
+            # This can be tested by pinging 127.0.0.1
+            # You'll see your own request
+            if type != 8 and packet_id == id_:
+                bytes_in_double = struct.calcsize("d")
+                time_sent = struct.unpack("d", rec_packet[28:28 + bytes_in_double])[0]
+
+                return time_received - time_sent
+
+    except asyncio.TimeoutError:
+        return None
 
 
-def send_one_ping(my_socket, dest_addr, ID):
+async def send_one_ping(my_socket, dest_addr, id_, timeout):
     """
     Send one ping to the given >dest_addr<.
+    :param my_socket:
+    :param dest_addr:
+    :param id_:
+    :param timeout:
+    :return:
     """
-    dest_addr  =  socket.gethostbyname(dest_addr)
+    resolver = aiodns.DNSResolver(timeout=timeout, tries=1)
+
+    dest_addr = await resolver.gethostbyname(dest_addr, socket.AF_INET)
+    dest_addr = dest_addr.addresses[0]
 
     # Header is type (8), code (8), checksum (16), id (16), sequence (16)
     my_checksum = 0
 
-    # Make a dummy heder with a 0 checksum.
-    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, my_checksum, ID, 1)
-    bytesInDouble = struct.calcsize("d")
-    data = (192 - bytesInDouble) * "Q"
-    data = struct.pack("d", default_timer()) + data
+    # Make a dummy header with a 0 checksum.
+    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, my_checksum, id_, 1)
+    bytes_in_double = struct.calcsize("d")
+    data = (192 - bytes_in_double) * "Q"
+    data = struct.pack("d", default_timer()) + data.encode("ascii")
 
     # Calculate the checksum on the data and the dummy header.
     my_checksum = checksum(header + data)
@@ -163,61 +187,82 @@ def send_one_ping(my_socket, dest_addr, ID):
     # Now that we have the right checksum, we put that in. It's just easier
     # to make up a new header than to stuff it into the dummy.
     header = struct.pack(
-        "bbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(my_checksum), ID, 1
+        "bbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(my_checksum), id_, 1
     )
     packet = header + data
-    my_socket.sendto(packet, (dest_addr, 1)) # Don't know about the 1
+
+    loop = asyncio.get_event_loop()
+    await loop.sock_connect(my_socket, (dest_addr, 1))
+    await loop.sock_sendall(my_socket, packet)
 
 
-def do_one(dest_addr, timeout):
+async def ping(dest_addr, timeout):
     """
     Returns either the delay (in seconds) or none on timeout.
+    :param dest_addr:
+    :param timeout:
     """
     icmp = socket.getprotobyname("icmp")
+
     try:
         my_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
-    except socket.error, (errno, msg):
-        if errno == 1:
+        my_socket.setblocking(0)
+
+    except OSError as e:
+        msg = e.strerror
+
+        if e.errno == 1:
             # Operation not permitted
-            msg = msg + (
+            msg += (
                 " - Note that ICMP messages can only be sent from processes"
                 " running as root."
             )
-            raise socket.error(msg)
+
+            raise OSError(msg)
+
         raise # raise the original error
 
-    my_ID = os.getpid() & 0xFFFF
+    my_id = os.getpid() & 0xFFFF
 
-    send_one_ping(my_socket, dest_addr, my_ID)
-    delay = receive_one_ping(my_socket, my_ID, timeout)
-
+    await send_one_ping(my_socket, dest_addr, my_id, timeout)
+    delay = await receive_one_ping(my_socket, my_id, timeout)
     my_socket.close()
+
     return delay
 
 
-def verbose_ping(dest_addr, timeout = 2, count = 4):
+async def verbose_ping(dest_addr, timeout=2, count=3):
     """
     Send >count< ping to >dest_addr< with the given >timeout< and display
     the result.
+    :param dest_addr:
+    :param timeout:
+    :param count:
     """
-    for i in xrange(count):
-        print "ping %s..." % dest_addr,
+    for i in range(count):
         try:
-            delay  =  do_one(dest_addr, timeout)
-        except socket.gaierror, e:
-            print "failed. (socket error: '%s')" % e[1]
+            delay = await ping(dest_addr, timeout)
+        except aiodns.error.DNSError as e:
+            print("%s failed. (socket error: '%s')" % (dest_addr, str(e)))
             break
 
-        if delay  ==  None:
-            print "failed. (timeout within %ssec.)" % timeout
+        if delay is None:
+            print("%s failed. (timeout within %ssec.)" % (dest_addr, timeout))
         else:
-            delay  =  delay * 1000
-            print "get ping in %0.4fms" % delay
-    print
+            delay *= 1000
+            print("%s get ping in %0.4fms" % (dest_addr, delay))
+
+    print()
 
 
-if __name__ == '__main__':
-    verbose_ping("heise.de")
-    verbose_ping("google.com")
-    verbose_ping("a-test-url-taht-is-not-available.com")
-    verbose_ping("192.168.1.1")
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+
+    tasks = [
+        asyncio.ensure_future(verbose_ping("heise.de")),
+        asyncio.ensure_future(verbose_ping("google.com")),
+        asyncio.ensure_future(verbose_ping("a-test-url-taht-is-not-available.com")),
+        asyncio.ensure_future(verbose_ping("192.168.1.111"))
+    ]
+
+    loop.run_until_complete(asyncio.gather(*tasks))
