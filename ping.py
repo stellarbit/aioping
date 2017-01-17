@@ -15,7 +15,7 @@
     placed in the public domain. They have my thanks.
 
     Bugs are naturally mine. I'd be glad to hear about them. There are
-    certainly word - size dependenceies here.
+    certainly word - size dependencies here.
 
     Copyright (c) Matthew Dixon Cowles, <http://www.visi.com/~mdc/>.
     Distributable under the terms of the GNU General Public License
@@ -27,21 +27,11 @@
     Rewrite by Jens Diemer:
       -> http://www.python-forum.de/post-69122.html#69122
 
+    Rewrite by Anton Belousov / Stellarbit LLC <anton@stellarbit.com>
+       -> http://github.com/stellarbit/asyncio-ping
 
     Revision history
     ~~~~~~~~~~~~~~~~
-
-    March 11, 2010
-    changes by Samuel Stauffer:
-    - replaced time.clock with default_timer which is set to
-      time.clock on windows and time.time on other systems.
-
-    May 30, 2007
-    little rewrite by Jens Diemer:
-     -  change socket asterisk import to a normal import
-     -  replace time.time() with time.clock()
-     -  delete "return None" (or change to "return" only)
-     -  in checksum() rename "str" to "source_string"
 
     November 22, 1997
     Initial hack. Doesn't do much, but rather than try to guess
@@ -58,13 +48,26 @@
     Changed the struct.pack() calls to pack the checksum and ID as
     unsigned. My thanks to Jerome Poincheval for the fix.
 
+    May 30, 2007
+    little rewrite by Jens Diemer:
+     -  change socket asterisk import to a normal import
+     -  replace time.time() with time.clock()
+     -  delete "return None" (or change to "return" only)
+     -  in checksum() rename "str" to "source_string"
+
+    March 11, 2010
+    changes by Samuel Stauffer:
+    - replaced time.clock with default_timer which is set to
+      time.clock on windows and time.time on other systems.
+
     Januari 27, 2015
     Changed receive response to not accept ICMP request messages.
     It was possible to receive the very request that was sent.
 
     January 15, 2017
-    Python 3 asyncio adaptation.
-    Anton Belousov / Stellarbit LLC
+    Changes by Anton Belousov / Stellarbit LLC
+    - asyncio & python 3.5+ adaptaion
+    - PEP-8 code reformatting
 
     Last commit info:
     ~~~~~~~~~~~~~~~~~
@@ -81,6 +84,7 @@ import sys
 import socket
 import struct
 import time
+
 
 if sys.platform == "win32":
     # On Windows, the best timer is time.clock()
@@ -155,7 +159,7 @@ async def receive_one_ping(my_socket, id_, timeout):
                 return time_received - time_sent
 
     except asyncio.TimeoutError:
-        return None
+        raise TimeoutError("Ping timeout")
 
 
 async def send_one_ping(my_socket, dest_addr, id_, timeout):
@@ -167,10 +171,13 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     :param timeout:
     :return:
     """
-    resolver = aiodns.DNSResolver(timeout=timeout, tries=1)
+    try:
+        resolver = aiodns.DNSResolver(timeout=timeout, tries=1)
+        dest_addr = await resolver.gethostbyname(dest_addr, socket.AF_INET)
+        dest_addr = dest_addr.addresses[0]
 
-    dest_addr = await resolver.gethostbyname(dest_addr, socket.AF_INET)
-    dest_addr = dest_addr.addresses[0]
+    except aiodns.error.DNSError:
+        raise ValueError("Unable to resolve host")
 
     # Header is type (8), code (8), checksum (16), id (16), sequence (16)
     my_checksum = 0
@@ -220,7 +227,7 @@ async def ping(dest_addr, timeout):
 
             raise OSError(msg)
 
-        raise # raise the original error
+        raise
 
     my_id = os.getpid() & 0xFFFF
 
@@ -242,15 +249,12 @@ async def verbose_ping(dest_addr, timeout=2, count=3):
     for i in range(count):
         try:
             delay = await ping(dest_addr, timeout)
-        except aiodns.error.DNSError as e:
-            print("%s failed. (socket error: '%s')" % (dest_addr, str(e)))
+        except Exception as e:
+            print("%s failed: %s" % (dest_addr, str(e)))
             break
 
-        if delay is None:
-            print("%s failed. (timeout within %ssec.)" % (dest_addr, timeout))
-        else:
-            delay *= 1000
-            print("%s get ping in %0.4fms" % (dest_addr, delay))
+        delay *= 1000
+        print("%s get ping in %0.4fms" % (dest_addr, delay))
 
     print()
 
