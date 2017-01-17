@@ -28,7 +28,7 @@
       -> http://www.python-forum.de/post-69122.html#69122
 
     Rewrite by Anton Belousov / Stellarbit LLC <anton@stellarbit.com>
-       -> http://github.com/stellarbit/asyncio-ping
+       -> http://github.com/stellarbit/aioping
 
     Revision history
     ~~~~~~~~~~~~~~~~
