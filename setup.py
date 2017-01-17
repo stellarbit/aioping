@@ -9,7 +9,7 @@ setup(
     author="Anton Belousov",
     author_email="anton@stellarbit.com",
     url="https://github.com/stellarbit/aioping",
-    download_url="https://github.com/stellarbit/aioping/tarball/1.0",
+    download_url="https://github.com/stellarbit/aioping/tarball/0.1.0",
     keywords=["network", "icmp", "ping", "asyncio"],
     classifiers=[
         "Development Status :: 4 - Beta",
