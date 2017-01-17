@@ -203,9 +203,9 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     await loop.sock_sendall(my_socket, packet)
 
 
-async def ping(dest_addr, timeout):
+async def ping(dest_addr, timeout=10):
     """
-    Returns either the delay (in seconds) or none on timeout.
+    Returns either the delay (in seconds) or raises an exception.
     :param dest_addr:
     :param timeout:
     """
