@@ -94,8 +94,9 @@ else:
     # On most other platforms the best timer is time.time()
     default_timer = time.time
 
-# From /usr/include/linux/icmp.h; your milage may vary.
-ICMP_ECHO_REQUEST = 8 # Seems to be the same on Solaris.
+# ICMP types, see rfc792 for v4, rfc4443 for v6
+ICMP_ECHO_REQUEST = 8
+ICMP6_ECHO_REQUEST = 128
 
 
 def checksum(buffer):
@@ -147,7 +148,7 @@ async def receive_one_ping(my_socket, id_, timeout):
             icmp_header = rec_packet[20:28]
 
             type, code, checksum, packet_id, sequence = struct.unpack(
-                "bbHHh", icmp_header
+                "BbHHh", icmp_header
             )
 
             # Filters out the echo request itself.
@@ -189,7 +190,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     my_checksum = 0
 
     # Make a dummy header with a 0 checksum.
-    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, my_checksum, id_, 1)
+    header = struct.pack("BbHHh", ICMP_ECHO_REQUEST, 0, my_checksum, id_, 1)
     bytes_in_double = struct.calcsize("d")
     data = (192 - bytes_in_double) * "Q"
     data = struct.pack("d", default_timer()) + data.encode("ascii")
@@ -200,7 +201,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     # Now that we have the right checksum, we put that in. It's just easier
     # to make up a new header than to stuff it into the dummy.
     header = struct.pack(
-        "bbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(my_checksum), id_, 1
+        "BbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(my_checksum), id_, 1
     )
     packet = header + data
 
