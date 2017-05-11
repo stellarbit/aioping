@@ -84,6 +84,7 @@ import sys
 import socket
 import struct
 import time
+import functools
 
 
 if sys.platform == "win32":
@@ -171,6 +172,11 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     :param timeout:
     :return:
     """
+
+    def sendto_ready(packet, socket):
+        my_socket.sendto(packet, (dest_addr, 1))
+        asyncio.get_event_loop().remove_writer(my_socket)
+
     try:
         resolver = aiodns.DNSResolver(timeout=timeout, tries=1)
         dest_addr = await resolver.gethostbyname(dest_addr, socket.AF_INET)
@@ -198,9 +204,8 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     )
     packet = header + data
 
-    loop = asyncio.get_event_loop()
-    await loop.sock_connect(my_socket, (dest_addr, 1))
-    await loop.sock_sendall(my_socket, packet)
+    callback = functools.partial(sendto_ready, packet=packet, socket=socket)
+    asyncio.get_event_loop().add_writer(my_socket, callback)
 
 
 async def ping(dest_addr, timeout=10):
