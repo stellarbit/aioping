@@ -78,7 +78,6 @@
 
 import asyncio
 import async_timeout
-import aiodns
 import os
 import sys
 import socket
@@ -97,6 +96,8 @@ else:
 # ICMP types, see rfc792 for v4, rfc4443 for v6
 ICMP_ECHO_REQUEST = 8
 ICMP6_ECHO_REQUEST = 128
+ICMP_ECHO_REPLY = 0
+ICMP6_ECHO_REPLY = 129
 
 
 def checksum(buffer):
@@ -145,18 +146,24 @@ async def receive_one_ping(my_socket, id_, timeout):
         with async_timeout.timeout(timeout):
             rec_packet = await loop.sock_recv(my_socket, 1024)
             time_received = default_timer()
-            icmp_header = rec_packet[20:28]
+
+            if my_socket.family == socket.AddressFamily.AF_INET:
+                offset = 20
+            else:
+                offset = 0
+
+            icmp_header = rec_packet[offset:offset + 8]
 
             type, code, checksum, packet_id, sequence = struct.unpack(
-                "BbHHh", icmp_header
+                "bbHHh", icmp_header
             )
 
-            # Filters out the echo request itself.
-            # This can be tested by pinging 127.0.0.1
-            # You'll see your own request
-            if type != 8 and packet_id == id_:
-                bytes_in_double = struct.calcsize("d")
-                time_sent = struct.unpack("d", rec_packet[28:28 + bytes_in_double])[0]
+            if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
+                next
+
+            if packet_id == id_:
+                data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
+                time_sent = struct.unpack("d", data)[0]
 
                 return time_received - time_sent
 
@@ -164,7 +171,7 @@ async def receive_one_ping(my_socket, id_, timeout):
         raise TimeoutError("Ping timeout")
 
 
-async def send_one_ping(my_socket, dest_addr, id_, timeout):
+async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     """
     Send one ping to the given >dest_addr<.
     :param my_socket:
@@ -175,22 +182,17 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     """
 
     def sendto_ready(packet, socket):
-        my_socket.sendto(packet, (dest_addr, 1))
+        my_socket.sendto(packet, dest_addr)
         asyncio.get_event_loop().remove_writer(my_socket)
 
-    try:
-        resolver = aiodns.DNSResolver(timeout=timeout, tries=1)
-        dest_addr = await resolver.gethostbyname(dest_addr, socket.AF_INET)
-        dest_addr = dest_addr.addresses[0]
-
-    except aiodns.error.DNSError:
-        raise ValueError("Unable to resolve host")
+    icmp_type = ICMP_ECHO_REQUEST if family == socket.AddressFamily.AF_INET\
+        else ICMP6_ECHO_REQUEST
 
     # Header is type (8), code (8), checksum (16), id (16), sequence (16)
     my_checksum = 0
 
     # Make a dummy header with a 0 checksum.
-    header = struct.pack("BbHHh", ICMP_ECHO_REQUEST, 0, my_checksum, id_, 1)
+    header = struct.pack("BbHHh", icmp_type, 0, my_checksum, id_, 1)
     bytes_in_double = struct.calcsize("d")
     data = (192 - bytes_in_double) * "Q"
     data = struct.pack("d", default_timer()) + data.encode("ascii")
@@ -201,7 +203,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     # Now that we have the right checksum, we put that in. It's just easier
     # to make up a new header than to stuff it into the dummy.
     header = struct.pack(
-        "BbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(my_checksum), id_, 1
+        "BbHHh", icmp_type, 0, socket.htons(my_checksum), id_, 1
     )
     packet = header + data
 
@@ -215,11 +217,20 @@ async def ping(dest_addr, timeout=10):
     :param dest_addr:
     :param timeout:
     """
-    icmp = socket.getprotobyname("icmp")
+
+    loop = asyncio.get_event_loop()
+    info = await loop.getaddrinfo(dest_addr, 0)
+    family = info[2][0]
+    addr = info[2][4]
+
+    if family == socket.AddressFamily.AF_INET:
+        icmp = socket.getprotobyname("icmp")
+    else:
+        icmp = socket.getprotobyname("ipv6-icmp")
 
     try:
-        my_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
-        my_socket.setblocking(0)
+        my_socket = socket.socket(family, socket.SOCK_RAW, icmp)
+        my_socket.setblocking(False)
 
     except OSError as e:
         msg = e.strerror
@@ -237,7 +248,7 @@ async def ping(dest_addr, timeout=10):
 
     my_id = os.getpid() & 0xFFFF
 
-    await send_one_ping(my_socket, dest_addr, my_id, timeout)
+    await send_one_ping(my_socket, addr, my_id, timeout, family)
     delay = await receive_one_ping(my_socket, my_id, timeout)
     my_socket.close()
 
