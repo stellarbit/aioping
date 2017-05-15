@@ -99,6 +99,9 @@ ICMP6_ECHO_REQUEST = 128
 ICMP_ECHO_REPLY = 0
 ICMP6_ECHO_REPLY = 129
 
+proto_icmp = socket.getprotobyname("icmp")
+proto_icmp6 = socket.getprotobyname("ipv6-icmp")
+
 
 def checksum(buffer):
     """
@@ -224,9 +227,9 @@ async def ping(dest_addr, timeout=10):
     addr = info[2][4]
 
     if family == socket.AddressFamily.AF_INET:
-        icmp = socket.getprotobyname("icmp")
+        icmp = proto_icmp
     else:
-        icmp = socket.getprotobyname("ipv6-icmp")
+        icmp = proto_icmp6
 
     try:
         my_socket = socket.socket(family, socket.SOCK_RAW, icmp)
