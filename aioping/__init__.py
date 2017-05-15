@@ -147,28 +147,29 @@ async def receive_one_ping(my_socket, id_, timeout):
 
     try:
         with async_timeout.timeout(timeout):
-            rec_packet = await loop.sock_recv(my_socket, 1024)
-            time_received = default_timer()
+            while True:
+                rec_packet = await loop.sock_recv(my_socket, 1024)
+                time_received = default_timer()
 
-            if my_socket.family == socket.AddressFamily.AF_INET:
-                offset = 20
-            else:
-                offset = 0
+                if my_socket.family == socket.AddressFamily.AF_INET:
+                    offset = 20
+                else:
+                    offset = 0
 
-            icmp_header = rec_packet[offset:offset + 8]
+                icmp_header = rec_packet[offset:offset + 8]
 
-            type, code, checksum, packet_id, sequence = struct.unpack(
-                "bbHHh", icmp_header
-            )
+                type, code, checksum, packet_id, sequence = struct.unpack(
+                    "bbHHh", icmp_header
+                )
 
-            if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
-                next
+                if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
+                    next
 
-            if packet_id == id_:
-                data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
-                time_sent = struct.unpack("d", data)[0]
+                if packet_id == id_:
+                    data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
+                    time_sent = struct.unpack("d", data)[0]
 
-                return time_received - time_sent
+                    return time_received - time_sent
 
     except asyncio.TimeoutError:
         raise TimeoutError("Ping timeout")
