@@ -78,12 +78,11 @@
 
 import asyncio
 import async_timeout
-import os
 import sys
 import socket
 import struct
 import time
-import functools
+import uuid
 
 
 if sys.platform == "win32":
@@ -185,10 +184,6 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     :return:
     """
 
-    def sendto_ready(packet, socket):
-        my_socket.sendto(packet, dest_addr)
-        asyncio.get_event_loop().remove_writer(my_socket)
-
     icmp_type = ICMP_ECHO_REQUEST if family == socket.AddressFamily.AF_INET\
         else ICMP6_ECHO_REQUEST
 
@@ -211,8 +206,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     )
     packet = header + data
 
-    callback = functools.partial(sendto_ready, packet=packet, socket=socket)
-    asyncio.get_event_loop().add_writer(my_socket, callback)
+    my_socket.sendto(packet, dest_addr)
 
 
 async def ping(dest_addr, timeout=10):
@@ -250,7 +244,7 @@ async def ping(dest_addr, timeout=10):
 
         raise
 
-    my_id = os.getpid() & 0xFFFF
+    my_id = uuid.uuid4().int & 0xFFFF
 
     await send_one_ping(my_socket, addr, my_id, timeout, family)
     delay = await receive_one_ping(my_socket, my_id, timeout)
