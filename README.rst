@@ -38,7 +38,7 @@ error:
 
     async def do_ping(host):
         try:
-            delay = await aioping.ping(host)
+            delay = await aioping.ping(host) * 1000
             print("Ping response in %s ms" % delay)
 
         except TimeoutError:
