@@ -82,6 +82,7 @@ import sys
 import socket
 import struct
 import time
+import functools
 import uuid
 
 
@@ -174,6 +175,12 @@ async def receive_one_ping(my_socket, id_, timeout):
         raise TimeoutError("Ping timeout")
 
 
+def sendto_ready(packet, socket, future, dest):
+    socket.sendto(packet, dest)
+    asyncio.get_event_loop().remove_writer(socket)
+    future.set_result(None)
+
+
 async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     """
     Send one ping to the given >dest_addr<.
@@ -206,7 +213,10 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     )
     packet = header + data
 
-    my_socket.sendto(packet, dest_addr)
+    future = asyncio.get_event_loop().create_future()
+    callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
+    asyncio.get_event_loop().add_writer(my_socket, callback)
+    await future
 
 
 async def ping(dest_addr, timeout=10):
