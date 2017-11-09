@@ -78,12 +78,12 @@
 
 import asyncio
 import async_timeout
-import aiodns
-import os
 import sys
 import socket
 import struct
 import time
+import functools
+import uuid
 
 
 if sys.platform == "win32":
@@ -93,8 +93,14 @@ else:
     # On most other platforms the best timer is time.time()
     default_timer = time.time
 
-# From /usr/include/linux/icmp.h; your milage may vary.
-ICMP_ECHO_REQUEST = 8 # Seems to be the same on Solaris.
+# ICMP types, see rfc792 for v4, rfc4443 for v6
+ICMP_ECHO_REQUEST = 8
+ICMP6_ECHO_REQUEST = 128
+ICMP_ECHO_REPLY = 0
+ICMP6_ECHO_REPLY = 129
+
+proto_icmp = socket.getprotobyname("icmp")
+proto_icmp6 = socket.getprotobyname("ipv6-icmp")
 
 
 def checksum(buffer):
@@ -141,28 +147,41 @@ async def receive_one_ping(my_socket, id_, timeout):
 
     try:
         with async_timeout.timeout(timeout):
-            rec_packet = await loop.sock_recv(my_socket, 1024)
-            time_received = default_timer()
-            icmp_header = rec_packet[20:28]
+            while True:
+                rec_packet = await loop.sock_recv(my_socket, 1024)
+                time_received = default_timer()
 
-            type, code, checksum, packet_id, sequence = struct.unpack(
-                "bbHHh", icmp_header
-            )
+                if my_socket.family == socket.AddressFamily.AF_INET:
+                    offset = 20
+                else:
+                    offset = 0
 
-            # Filters out the echo request itself.
-            # This can be tested by pinging 127.0.0.1
-            # You'll see your own request
-            if type != 8 and packet_id == id_:
-                bytes_in_double = struct.calcsize("d")
-                time_sent = struct.unpack("d", rec_packet[28:28 + bytes_in_double])[0]
+                icmp_header = rec_packet[offset:offset + 8]
 
-                return time_received - time_sent
+                type, code, checksum, packet_id, sequence = struct.unpack(
+                    "bbHHh", icmp_header
+                )
+
+                if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
+                    continue
+
+                if packet_id == id_:
+                    data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
+                    time_sent = struct.unpack("d", data)[0]
+
+                    return time_received - time_sent
 
     except asyncio.TimeoutError:
         raise TimeoutError("Ping timeout")
 
 
-async def send_one_ping(my_socket, dest_addr, id_, timeout):
+def sendto_ready(packet, socket, future, dest):
+    socket.sendto(packet, dest)
+    asyncio.get_event_loop().remove_writer(socket)
+    future.set_result(None)
+
+
+async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     """
     Send one ping to the given >dest_addr<.
     :param my_socket:
@@ -171,19 +190,15 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     :param timeout:
     :return:
     """
-    try:
-        resolver = aiodns.DNSResolver(timeout=timeout, tries=1)
-        dest_addr = await resolver.gethostbyname(dest_addr, socket.AF_INET)
-        dest_addr = dest_addr.addresses[0]
 
-    except aiodns.error.DNSError:
-        raise ValueError("Unable to resolve host")
+    icmp_type = ICMP_ECHO_REQUEST if family == socket.AddressFamily.AF_INET\
+        else ICMP6_ECHO_REQUEST
 
     # Header is type (8), code (8), checksum (16), id (16), sequence (16)
     my_checksum = 0
 
     # Make a dummy header with a 0 checksum.
-    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, my_checksum, id_, 1)
+    header = struct.pack("BbHHh", icmp_type, 0, my_checksum, id_, 1)
     bytes_in_double = struct.calcsize("d")
     data = (192 - bytes_in_double) * "Q"
     data = struct.pack("d", default_timer()) + data.encode("ascii")
@@ -194,13 +209,14 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout):
     # Now that we have the right checksum, we put that in. It's just easier
     # to make up a new header than to stuff it into the dummy.
     header = struct.pack(
-        "bbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(my_checksum), id_, 1
+        "BbHHh", icmp_type, 0, socket.htons(my_checksum), id_, 1
     )
     packet = header + data
 
-    loop = asyncio.get_event_loop()
-    await loop.sock_connect(my_socket, (dest_addr, 1))
-    await loop.sock_sendall(my_socket, packet)
+    future = asyncio.get_event_loop().create_future()
+    callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
+    asyncio.get_event_loop().add_writer(my_socket, callback)
+    await future
 
 
 async def ping(dest_addr, timeout=10):
@@ -209,11 +225,20 @@ async def ping(dest_addr, timeout=10):
     :param dest_addr:
     :param timeout:
     """
-    icmp = socket.getprotobyname("icmp")
+
+    loop = asyncio.get_event_loop()
+    info = await loop.getaddrinfo(dest_addr, 0)
+    family = info[2][0]
+    addr = info[2][4]
+
+    if family == socket.AddressFamily.AF_INET:
+        icmp = proto_icmp
+    else:
+        icmp = proto_icmp6
 
     try:
-        my_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
-        my_socket.setblocking(0)
+        my_socket = socket.socket(family, socket.SOCK_RAW, icmp)
+        my_socket.setblocking(False)
 
     except OSError as e:
         msg = e.strerror
@@ -229,9 +254,9 @@ async def ping(dest_addr, timeout=10):
 
         raise
 
-    my_id = os.getpid() & 0xFFFF
+    my_id = uuid.uuid4().int & 0xFFFF
 
-    await send_one_ping(my_socket, dest_addr, my_id, timeout)
+    await send_one_ping(my_socket, addr, my_id, timeout, family)
     delay = await receive_one_ping(my_socket, my_id, timeout)
     my_socket.close()
 
@@ -253,8 +278,11 @@ async def verbose_ping(dest_addr, timeout=2, count=3):
             print("%s failed: %s" % (dest_addr, str(e)))
             break
 
-        delay *= 1000
-        print("%s get ping in %0.4fms" % (dest_addr, delay))
+        if delay is None:
+            print('%s timed out after %ss' % (dest_addr, timeout))
+        else:
+            delay *= 1000
+            print("%s get ping in %0.4fms" % (dest_addr, delay))
 
     print()
 
