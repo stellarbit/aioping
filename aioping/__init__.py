@@ -163,7 +163,7 @@ async def receive_one_ping(my_socket, id_, timeout):
                 )
 
                 if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
-                    next
+                    continue
 
                 if packet_id == id_:
                     data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
