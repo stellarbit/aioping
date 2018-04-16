@@ -84,6 +84,7 @@ import struct
 import time
 import functools
 import uuid
+import random
 
 
 if sys.platform == "win32":
@@ -228,8 +229,10 @@ async def ping(dest_addr, timeout=10):
 
     loop = asyncio.get_event_loop()
     info = await loop.getaddrinfo(dest_addr, 0)
-    family = info[2][0]
-    addr = info[2][4]
+    # Choose one of the IPs resolved by DNS
+    resolved = random.choice(info)
+    family = resolved[0]
+    addr = resolved[4]
 
     if family == socket.AddressFamily.AF_INET:
         icmp = proto_icmp
