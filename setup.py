@@ -5,6 +5,7 @@ setup(
     name="aioping",
     packages=["aioping"],
     version="0.1.0",
+    install_requires=["async_timeout", "aiodns"],
     description="Asyncio ping implementation",
     author="Anton Belousov",
     author_email="anton@stellarbit.com",
