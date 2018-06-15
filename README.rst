@@ -4,11 +4,15 @@ aioping is a fast asyncio implementation of ICMP (ping) protocol.
 Installation
 ------------
 
-aioping requires Python 3.5 and is not yet available on PyPI.
-Use pip to install it::
+aioping requires Python 3.5. 
+
+Use pip to install it from the PyPI::
+
+    $ pip install aioping
+
+Or use the latest version from the master (if you are brave enough)::
 
     $ pip install git+https://github.com/stellarbit/aioping
-
 
 Using aioping
 ------------
@@ -62,6 +66,13 @@ Credits
 
 - Rewrite by Anton Belousov / Stellarbit LLC <anton@stellarbit.com>
   http://github.com/stellarbit/aioping
+  
+- Generous contributions from GitHub users:
+
+  - https://github.com/JackSlateur
+  - https://github.com/harriv
+  - https://github.com/asantoni
+  - https://github.com/eddebc
 
 
 License
