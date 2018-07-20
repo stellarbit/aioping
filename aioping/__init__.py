@@ -76,6 +76,7 @@
     $Author: $
 """
 
+import logging
 import asyncio
 import async_timeout
 import sys
@@ -278,14 +279,14 @@ async def verbose_ping(dest_addr, timeout=2, count=3):
         try:
             delay = await ping(dest_addr, timeout)
         except Exception as e:
-            print("%s failed: %s" % (dest_addr, str(e)))
+            logger.exception("%s failed: %s" % (dest_addr, str(e)))
             break
 
         if delay is None:
-            print('%s timed out after %ss' % (dest_addr, timeout))
+            logger.error('%s timed out after %ss' % (dest_addr, timeout))
         else:
             delay *= 1000
-            print("%s get ping in %0.4fms" % (dest_addr, delay))
+            logger.info("%s get ping in %0.4fms" % (dest_addr, delay))
 
     print()
 
