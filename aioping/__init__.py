@@ -173,6 +173,7 @@ async def receive_one_ping(my_socket, id_, timeout):
                     return time_received - time_sent
 
     except asyncio.TimeoutError:
+        my_socket.close()
         raise TimeoutError("Ping timeout")
 
 
