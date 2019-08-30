@@ -104,36 +104,32 @@ proto_icmp = socket.getprotobyname("icmp")
 proto_icmp6 = socket.getprotobyname("ipv6-icmp")
 
 
-def checksum(buffer):
+def checksum(bytes, csum=0):
+    """Based on `in_cksum`-function from iputils
+
+    See: https://github.com/iputils/iputils/blob/master/ping.c#L1350
+
+    Note that `checksum(bytes, checksum(bytes())` should return `0`.
+    This can be used to verify the checksum of an incoming package.
+
+    :param bytes: Inputu bytes, used to compute checksum
+    :param csum: Initial value for checksum. Defualt `0`
+    :return: Computed checksum of bytes
     """
-    I'm not too confident that this is right but testing seems
-    to suggest that it gives the same answers as in_cksum in ping.c
-    :param buffer:
-    :return:
-    """
-    sum = 0
-    count_to = (len(buffer) / 2) * 2
-    count = 0
 
-    while count < count_to:
-        this_val = buffer[count + 1] * 256 + buffer[count]
-        sum += this_val
-        sum &= 0xffffffff # Necessary?
-        count += 2
+    sum = csum
 
-    if count_to < len(buffer):
-        sum += buffer[len(buffer) - 1]
-        sum &= 0xffffffff # Necessary?
+    for i in range(1, len(bytes), 2):
+        print(i)
+        sum += (bytes[i - 1] << 8) | bytes[i]
 
-    sum = (sum >> 16) + (sum & 0xffff)
+    if len(bytes) % 2 == 1:
+        sum += bytes[-1] << 8
+
+    sum = (sum >> 16) + (sum & 0xFFFF)
     sum += sum >> 16
-    answer = ~sum
-    answer &= 0xffff
 
-    # Swap bytes. Bugger me if I know why.
-    answer = answer >> 8 | (answer << 8 & 0xff00)
-
-    return answer
+    return (~sum) & 0xFFFF
 
 
 async def receive_one_ping(my_socket, id_, timeout):
