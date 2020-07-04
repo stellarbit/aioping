@@ -76,6 +76,7 @@
     $Author: $
 """
 
+import logging
 import asyncio
 import async_timeout
 import sys
@@ -85,6 +86,8 @@ import time
 import functools
 import uuid
 import random
+
+logger = logging.getLogger("aioping")
 
 
 if sys.platform == "win32":
@@ -275,19 +278,19 @@ async def verbose_ping(dest_addr, timeout=2, count=3):
     :param count:
     """
     for i in range(count):
+        delay = None
+
         try:
             delay = await ping(dest_addr, timeout)
+        except TimeoutError as e:
+            logger.error("%s timed out after %ss" % (dest_addr, timeout))
         except Exception as e:
-            print("%s failed: %s" % (dest_addr, str(e)))
+            logger.error("%s failed: %s" % (dest_addr, str(e)))
             break
 
-        if delay is None:
-            print('%s timed out after %ss' % (dest_addr, timeout))
-        else:
+        if delay is not None:
             delay *= 1000
-            print("%s get ping in %0.4fms" % (dest_addr, delay))
-
-    print()
+            logger.warning("%s get ping in %0.4fms" % (dest_addr, delay))
 
 
 if __name__ == "__main__":
