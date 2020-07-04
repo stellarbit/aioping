@@ -180,9 +180,17 @@ async def receive_one_ping(my_socket, id_, timeout):
 
 
 def sendto_ready(packet, socket, future, dest):
-    socket.sendto(packet, dest)
-    asyncio.get_event_loop().remove_writer(socket)
-    future.set_result(None)
+    try:
+        socket.sendto(packet, dest)
+    except (BlockingIOError, InterruptedError):
+        return  # The callback will be retried
+    except Exception as exc:
+        asyncio.get_event_loop().remove_writer(socket)
+        future.set_exception(exc)
+    else:
+        asyncio.get_event_loop().remove_writer(socket)
+        future.set_result(None)
+
 
 
 async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
