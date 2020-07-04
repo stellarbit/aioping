@@ -241,10 +241,15 @@ async def ping(dest_addr, timeout=10):
 
     loop = asyncio.get_event_loop()
     info = await loop.getaddrinfo(dest_addr, 0)
+
+    logger.debug("getaddrinfo result=%s", info)
+    
     # Choose one of the IPs resolved by DNS
     resolved = random.choice(info)
     family = resolved[0]
     addr = resolved[4]
+
+    logger.debug("resolved addr=%s", addr)
 
     if family == socket.AddressFamily.AF_INET:
         icmp = proto_icmp

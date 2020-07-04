@@ -1,9 +1,14 @@
 from unittest import TestCase
 import asyncio
 from aioping import verbose_ping, ping
+import logging
 
 
 class TestAioping(TestCase):
+    def __init__(self, methodName):
+        super().__init__(methodName)
+        logging.basicConfig(level=logging.DEBUG)
+
     def test_verbose_ping(self):
         loop = asyncio.get_event_loop()
 
