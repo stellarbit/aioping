@@ -19,7 +19,7 @@ Using aioping
 
 There are 2 ways to use the library.
 
-First one is interactive, which prints results to the stdout.
+First one is interactive, which sends results to standard Python logger.
 Please make sure you are running this code under root, as only
 root is allowed to send ICMP packets:
 
@@ -73,6 +73,7 @@ Credits
   - https://github.com/harriv
   - https://github.com/asantoni
   - https://github.com/eddebc
+  - https://github.com/wise0wl
 
 
 License
