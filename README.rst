@@ -75,6 +75,7 @@ Credits
   - https://github.com/eddebc
   - https://github.com/wise0wl
   - https://github.com/nARN
+  - https://github.com/hergla
 
 
 License
