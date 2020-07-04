@@ -220,6 +220,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     future = asyncio.get_event_loop().create_future()
     callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
     asyncio.get_event_loop().add_writer(my_socket, callback)
+
     await future
 
 
@@ -291,16 +292,3 @@ async def verbose_ping(dest_addr, timeout=2, count=3):
         if delay is not None:
             delay *= 1000
             logger.warning("%s get ping in %0.4fms" % (dest_addr, delay))
-
-
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-
-    tasks = [
-        asyncio.ensure_future(verbose_ping("heise.de")),
-        asyncio.ensure_future(verbose_ping("google.com")),
-        asyncio.ensure_future(verbose_ping("a-test-url-taht-is-not-available.com")),
-        asyncio.ensure_future(verbose_ping("192.168.1.111"))
-    ]
-
-    loop.run_until_complete(asyncio.gather(*tasks))
