@@ -180,9 +180,17 @@ async def receive_one_ping(my_socket, id_, timeout):
 
 
 def sendto_ready(packet, socket, future, dest):
-    socket.sendto(packet, dest)
-    asyncio.get_event_loop().remove_writer(socket)
-    future.set_result(None)
+    try:
+        socket.sendto(packet, dest)
+    except (BlockingIOError, InterruptedError):
+        return  # The callback will be retried
+    except Exception as exc:
+        asyncio.get_event_loop().remove_writer(socket)
+        future.set_exception(exc)
+    else:
+        asyncio.get_event_loop().remove_writer(socket)
+        future.set_result(None)
+
 
 
 async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
@@ -220,6 +228,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     future = asyncio.get_event_loop().create_future()
     callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
     asyncio.get_event_loop().add_writer(my_socket, callback)
+
     await future
 
 
@@ -232,10 +241,21 @@ async def ping(dest_addr, timeout=10):
 
     loop = asyncio.get_event_loop()
     info = await loop.getaddrinfo(dest_addr, 0)
-    # Choose one of the IPs resolved by DNS
-    resolved = random.choice(info)
+
+    logger.debug("%s getaddrinfo result=%s", dest_addr, info)
+
+    # Choose one of the v4 IPs resolved by DNS
+    resolved = list(filter(
+        lambda i: i[0] == socket.AddressFamily.AF_INET and i[1] == socket.SocketKind.SOCK_DGRAM,
+        info
+    ))
+
+    resolved = random.choice(resolved)
+
     family = resolved[0]
     addr = resolved[4]
+
+    logger.debug("%s resolved addr=%s", dest_addr, addr)
 
     if family == socket.AddressFamily.AF_INET:
         icmp = proto_icmp
@@ -290,17 +310,4 @@ async def verbose_ping(dest_addr, timeout=2, count=3):
 
         if delay is not None:
             delay *= 1000
-            logger.warning("%s get ping in %0.4fms" % (dest_addr, delay))
-
-
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-
-    tasks = [
-        asyncio.ensure_future(verbose_ping("heise.de")),
-        asyncio.ensure_future(verbose_ping("google.com")),
-        asyncio.ensure_future(verbose_ping("a-test-url-taht-is-not-available.com")),
-        asyncio.ensure_future(verbose_ping("192.168.1.111"))
-    ]
-
-    loop.run_until_complete(asyncio.gather(*tasks))
+            logger.info("%s get ping in %0.4fms" % (dest_addr, delay))

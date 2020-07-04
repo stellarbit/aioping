@@ -74,6 +74,7 @@ Credits
   - https://github.com/asantoni
   - https://github.com/eddebc
   - https://github.com/wise0wl
+  - https://github.com/nARN
 
 
 License
