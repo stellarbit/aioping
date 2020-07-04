@@ -76,6 +76,7 @@ Credits
   - https://github.com/wise0wl
   - https://github.com/nARN
   - https://github.com/hergla
+  - https://github.com/hanieljgoertz
 
 
 License
