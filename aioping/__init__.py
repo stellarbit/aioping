@@ -310,4 +310,4 @@ async def verbose_ping(dest_addr, timeout=2, count=3):
 
         if delay is not None:
             delay *= 1000
-            logger.warning("%s get ping in %0.4fms" % (dest_addr, delay))
+            logger.info("%s get ping in %0.4fms" % (dest_addr, delay))
