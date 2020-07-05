@@ -27,7 +27,7 @@ class TestAioping(TestCase):
     async def _do_ping(self, host):
         try:
             delay = await ping(host) * 1000
-            print("%s ping response in %s ms" % (host, delay))
+            print("%s ping response in %0.4fms" % (host, delay))
         except TimeoutError:
             print("%s timed out" % host)
 
