@@ -176,7 +176,10 @@ async def receive_one_ping(my_socket, id_, timeout):
                     return time_received - time_sent
 
     except asyncio.TimeoutError:
+        asyncio.get_event_loop().remove_writer(my_socket)
+        asyncio.get_event_loop().remove_reader(my_socket)
         my_socket.close()
+
         raise TimeoutError("Ping timeout")
 
 
@@ -193,7 +196,6 @@ def sendto_ready(packet, socket, future, dest):
         future.set_result(None)
 
 
-
 async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     """
     Send one ping to the given >dest_addr<.
@@ -203,7 +205,6 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     :param timeout:
     :return:
     """
-
     icmp_type = ICMP_ECHO_REQUEST if family == socket.AddressFamily.AF_INET\
         else ICMP6_ECHO_REQUEST
 
@@ -233,11 +234,12 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     await future
 
 
-async def ping(dest_addr, timeout=10):
+async def ping(dest_addr, timeout=10, family=None):
     """
     Returns either the delay (in seconds) or raises an exception.
     :param dest_addr:
     :param timeout:
+    :param family:
     """
 
     loop = asyncio.get_event_loop()
@@ -245,13 +247,10 @@ async def ping(dest_addr, timeout=10):
 
     logger.debug("%s getaddrinfo result=%s", dest_addr, info)
 
-    # Choose one of the v4 IPs resolved by DNS
-    resolved = list(filter(
-        lambda i: i[0] == socket.AddressFamily.AF_INET and i[1] == socket.SocketKind.SOCK_DGRAM,
-        info
-    ))
+    if family is not None:
+        info = list(filter(lambda i: i[0] == family, info))
 
-    resolved = random.choice(resolved)
+    resolved = random.choice(info)
 
     family = resolved[0]
     addr = resolved[4]

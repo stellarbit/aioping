@@ -27,7 +27,9 @@ root is allowed to send ICMP packets:
 
     import asyncio
     import aioping
+    import logging
 
+    logging.basicConfig(level=logging.INFO)     # or logging.DEBUG
     loop = asyncio.get_event_loop()
     loop.run_until_complete(aioping.verbose_ping("google.com"))
 
