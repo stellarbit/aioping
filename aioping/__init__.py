@@ -91,7 +91,6 @@ logger = logging.getLogger("aioping")
 default_timer = time.perf_counter
 
 if sys.platform.startswith("win"):
-    # time.clock is deprecated in Python 3.8+
     if sys.version_info[0] > 3 or (sys.version_info[0] == 3 and sys.version_info[1] >= 8):
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
