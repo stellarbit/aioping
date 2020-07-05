@@ -79,6 +79,7 @@ Credits
   - https://github.com/nARN
   - https://github.com/hergla
   - https://github.com/hanieljgoertz
+  - https://github.com/Crypto-Spartan
 
 
 License
