@@ -250,6 +250,9 @@ async def ping(dest_addr, timeout=10, family=None):
     if family is not None:
         info = list(filter(lambda i: i[0] == family, info))
 
+    if len(info) == 0:
+        raise socket.gaierror("%s hostname not found for address family %s" % (dest_addr, family))
+
     resolved = random.choice(info)
 
     family = resolved[0]
@@ -289,19 +292,20 @@ async def ping(dest_addr, timeout=10, family=None):
     return delay
 
 
-async def verbose_ping(dest_addr, timeout=2, count=3):
+async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
     """
     Send >count< ping to >dest_addr< with the given >timeout< and display
     the result.
     :param dest_addr:
     :param timeout:
     :param count:
+    :param family:
     """
     for i in range(count):
         delay = None
 
         try:
-            delay = await ping(dest_addr, timeout)
+            delay = await ping(dest_addr, timeout, family)
         except TimeoutError as e:
             logger.error("%s timed out after %ss" % (dest_addr, timeout))
         except Exception as e:
