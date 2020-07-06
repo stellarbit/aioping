@@ -15,7 +15,7 @@ Or use the latest version from the master (if you are brave enough)::
     $ pip install git+https://github.com/stellarbit/aioping
 
 Using aioping
-------------
+-------------
 
 There are 2 ways to use the library.
 
@@ -27,7 +27,9 @@ root is allowed to send ICMP packets:
 
     import asyncio
     import aioping
+    import logging
 
+    logging.basicConfig(level=logging.INFO)     # or logging.DEBUG
     loop = asyncio.get_event_loop()
     loop.run_until_complete(aioping.verbose_ping("google.com"))
 
@@ -51,6 +53,23 @@ error:
     loop = asyncio.get_event_loop()
     loop.run_until_complete(do_ping("google.com"))
 
+Methods
+-------
+
+``ping(dest_addr, timeout=10, family=None)``
+
+- ``dest_addr`` - destination address, IPv4, IPv6 or hostname
+- ``timeout`` - timeout in seconds (default: ``10``)
+- ``family`` - family of resolved address - ``socket.AddressFamily.AF_INET`` for IPv4, ``socket.AddressFamily.AF_INET6``
+  for IPv6 or ``None`` if it doesn't matter (default: ``None``)
+
+``verbose_ping(dest_addr, timeout=2, count=3, family=None)``
+
+- ``dest_addr`` - destination address, IPv4, IPv6 or hostname
+- ``timeout`` - timeout in seconds (default: ``2``)
+- ``count`` - count of packets to send (default: ``3``)
+- ``family`` - family of resolved address - ``socket.AddressFamily.AF_INET`` for IPv4, ``socket.AddressFamily.AF_INET6``
+  for IPv6 or ``None`` if it doesn't matter (default: ``None``)
 
 Credits
 -------
@@ -77,6 +96,7 @@ Credits
   - https://github.com/nARN
   - https://github.com/hergla
   - https://github.com/hanieljgoertz
+  - https://github.com/Crypto-Spartan
 
 
 License
