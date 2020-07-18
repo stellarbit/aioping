@@ -104,7 +104,7 @@ proto_icmp = socket.getprotobyname("icmp")
 proto_icmp6 = socket.getprotobyname("ipv6-icmp")
 
 
-def checksum(buffer):
+def _checksum(buffer):
     """
     I'm not too confident that this is right but testing seems
     to suggest that it gives the same answers as in_cksum in ping.c
@@ -136,7 +136,7 @@ def checksum(buffer):
     return answer
 
 
-async def receive_one_ping(my_socket, id_, timeout):
+async def _receive_one_ping(my_socket, id_, timeout):
     """
     receive the ping from the socket.
     :param my_socket:
@@ -180,7 +180,7 @@ async def receive_one_ping(my_socket, id_, timeout):
         raise TimeoutError("Ping timeout")
 
 
-def sendto_ready(packet, socket, future, dest):
+def _sendto_ready(packet, socket, future, dest):
     try:
         socket.sendto(packet, dest)
     except (BlockingIOError, InterruptedError):
@@ -193,7 +193,7 @@ def sendto_ready(packet, socket, future, dest):
         future.set_result(None)
 
 
-async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
+async def _send_one_ping(my_socket, dest_addr, id_, timeout, family):
     """
     Send one ping to the given >dest_addr<.
     :param my_socket:
@@ -215,7 +215,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     data = struct.pack("d", default_timer()) + data.encode("ascii")
 
     # Calculate the checksum on the data and the dummy header.
-    my_checksum = checksum(header + data)
+    my_checksum = _checksum(header + data)
 
     # Now that we have the right checksum, we put that in. It's just easier
     # to make up a new header than to stuff it into the dummy.
@@ -225,7 +225,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     packet = header + data
 
     future = asyncio.get_event_loop().create_future()
-    callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
+    callback = functools.partial(_sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
     asyncio.get_event_loop().add_writer(my_socket, callback)
 
     await future
@@ -282,8 +282,8 @@ async def ping(dest_addr, timeout=10, family=None):
 
     my_id = uuid.uuid4().int & 0xFFFF
 
-    await send_one_ping(my_socket, addr, my_id, timeout, family)
-    delay = await receive_one_ping(my_socket, my_id, timeout)
+    await _send_one_ping(my_socket, addr, my_id, timeout, family)
+    delay = await _receive_one_ping(my_socket, my_id, timeout)
     my_socket.close()
 
     return delay
