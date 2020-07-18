@@ -170,7 +170,7 @@ async def _receive_one_ping(my_socket, id_, timeout):
                     data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
                     time_sent = struct.unpack("d", data)[0]
 
-                    return time_received - time_sent
+                    return (time_received - time_sent) * 1000
 
     except asyncio.TimeoutError:
         asyncio.get_event_loop().remove_writer(my_socket)
