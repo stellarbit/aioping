@@ -314,23 +314,40 @@ async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
 
 
 async def _do_multiping(dest_addr, timeout=5, family=None):
-  try:
-    delay = await ping(dest_addr, timeout, family)
-    return (dest_addr, delay)
+    """
+    Execute the ping of a single address for multiping function
+    """
 
-  except TimeoutError:
-    return (dest_addr, 'TimeoutError')
+    try:
+        delay = await ping(dest_addr, timeout, family)
+        return (dest_addr, delay)
+
+    except TimeoutError:
+        return (dest_addr, 'TimeoutError')
 
 
 async def _multiping_sem(dest_addr, sem, timeout=5, family=None):
+    """
+    run the multiping with asyncio.Semaphore limit of 255
+    """
+    
     async with sem:
         return await _do_ping_sem(dest_addr, timeout, family)
 
 
 async def multiping(dest_addr, timeout=5, family=None):
+    """
+    Returns tuple (dest_addr, delay) for each ip address
+    or domain submitted in a list. Will return 
+    (dest_addr, 'TimeoutError') if ping times out.
+    """
+
+    # limit because of select()
     if len(dest_addr) > 255:
         sem = asyncio.Semaphore(255)
         tasks = [_multiping_sem(x, sem, timeout, family) for x in dest_addr]
+    
+    # no limit if pinging less than 255 addresses
     else:
         tasks = [_do_multiping(x, timeout, family) for x in dest_addr]
 
