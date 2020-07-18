@@ -310,5 +310,29 @@ async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
             break
 
         if delay is not None:
-            delay *= 1000
             logger.info("%s get ping in %0.4fms" % (dest_addr, delay))
+
+
+async def _do_multiping(dest_addr, timeout=5, family=None):
+  try:
+    delay = await ping(dest_addr, timeout, family)
+    return (dest_addr, delay)
+
+  except TimeoutError:
+    return (dest_addr, 'TimeoutError')
+
+
+async def _multiping_sem(dest_addr, sem, timeout=5, family=None):
+    async with sem:
+        return await _do_ping_sem(dest_addr, timeout, family)
+
+
+async def multiping(dest_addr, timeout=5, family=None):
+    if len(dest_addr) > 255:
+        sem = asyncio.Semaphore(255)
+        tasks = [_multiping_sem(x, sem, timeout, family) for x in dest_addr]
+    else:
+        tasks = [_do_multiping(x, timeout, family) for x in dest_addr]
+
+    return await asyncio.gather(*tasks)
+    
