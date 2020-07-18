@@ -17,7 +17,7 @@ Or use the latest version from the master (if you are brave enough)::
 Using aioping
 -------------
 
-There are 2 ways to use the library.
+There are 3 ways to use the library.
 
 First one is interactive, which sends results to standard Python logger.
 Please make sure you are running this code under root, as only
@@ -30,10 +30,9 @@ root is allowed to send ICMP packets:
     import logging
 
     logging.basicConfig(level=logging.INFO)     # or logging.DEBUG
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(aioping.verbose_ping("google.com"))
+    asyncio.run(aioping.verbose_ping("google.com"))
 
-Alternatively, you can call a ping function, which returns a
+Secondly, you can call a ping function, which returns a
 ping delay in milliseconds or throws an exception in case of
 error:
 
@@ -44,14 +43,31 @@ error:
 
     async def do_ping(host):
         try:
-            delay = await aioping.ping(host) * 1000
+            delay = await aioping.ping(host)
             print("Ping response in %s ms" % delay)
 
         except TimeoutError:
             print("Timed out")
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(do_ping("google.com"))
+    asyncio.run(do_ping("google.com"))
+    
+The last way is to call a multiping function, which returns a
+list of tuples. The tuples are formatted as (dest_addr, delay) with 
+delay measured in milliseconds. In the event of a timeout, the tuple 
+will be returned as (dest_addr, 'TimeoutError'). Lowering the timeout 
+will result in a faster return. NOTE: This function is limited to 255
+pings at one time due to the limitation of select().
+
+.. code:: python
+
+    import asyncio
+    import aioping
+    
+    async def do_multiping():
+        results = await aioping.multiping(['8.8.8.8','1.1.1.1','google.com'])
+        print(results)
+        
+    asyncio.run(do_multiping())
 
 Methods
 -------
@@ -68,6 +84,13 @@ Methods
 - ``dest_addr`` - destination address, IPv4, IPv6 or hostname
 - ``timeout`` - timeout in seconds (default: ``2``)
 - ``count`` - count of packets to send (default: ``3``)
+- ``family`` - family of resolved address - ``socket.AddressFamily.AF_INET`` for IPv4, ``socket.AddressFamily.AF_INET6``
+  for IPv6 or ``None`` if it doesn't matter (default: ``None``)
+  
+``multiping(dest_addr, timeout=5, family=None)``
+
+- ``dest_addr`` - destination address, IPv4, IPv6 or hostname
+- ``timeout`` - timeout in seconds (default: ``5``)
 - ``family`` - family of resolved address - ``socket.AddressFamily.AF_INET`` for IPv4, ``socket.AddressFamily.AF_INET6``
   for IPv6 or ``None`` if it doesn't matter (default: ``None``)
 
