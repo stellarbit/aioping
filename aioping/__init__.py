@@ -104,7 +104,7 @@ proto_icmp = socket.getprotobyname("icmp")
 proto_icmp6 = socket.getprotobyname("ipv6-icmp")
 
 
-def checksum(buffer):
+def _checksum(buffer):
     """
     I'm not too confident that this is right but testing seems
     to suggest that it gives the same answers as in_cksum in ping.c
@@ -136,7 +136,7 @@ def checksum(buffer):
     return answer
 
 
-async def receive_one_ping(my_socket, id_, timeout):
+async def _receive_one_ping(my_socket, id_, timeout):
     """
     receive the ping from the socket.
     :param my_socket:
@@ -170,7 +170,7 @@ async def receive_one_ping(my_socket, id_, timeout):
                     data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
                     time_sent = struct.unpack("d", data)[0]
 
-                    return time_received - time_sent
+                    return (time_received - time_sent) * 1000
 
     except asyncio.TimeoutError:
         asyncio.get_event_loop().remove_writer(my_socket)
@@ -180,7 +180,7 @@ async def receive_one_ping(my_socket, id_, timeout):
         raise TimeoutError("Ping timeout")
 
 
-def sendto_ready(packet, socket, future, dest):
+def _sendto_ready(packet, socket, future, dest):
     try:
         socket.sendto(packet, dest)
     except (BlockingIOError, InterruptedError):
@@ -193,7 +193,7 @@ def sendto_ready(packet, socket, future, dest):
         future.set_result(None)
 
 
-async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
+async def _send_one_ping(my_socket, dest_addr, id_, timeout, family):
     """
     Send one ping to the given >dest_addr<.
     :param my_socket:
@@ -215,7 +215,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     data = struct.pack("d", default_timer()) + data.encode("ascii")
 
     # Calculate the checksum on the data and the dummy header.
-    my_checksum = checksum(header + data)
+    my_checksum = _checksum(header + data)
 
     # Now that we have the right checksum, we put that in. It's just easier
     # to make up a new header than to stuff it into the dummy.
@@ -225,7 +225,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     packet = header + data
 
     future = asyncio.get_event_loop().create_future()
-    callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
+    callback = functools.partial(_sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
     asyncio.get_event_loop().add_writer(my_socket, callback)
 
     await future
@@ -282,8 +282,8 @@ async def ping(dest_addr, timeout=10, family=None):
 
     my_id = uuid.uuid4().int & 0xFFFF
 
-    await send_one_ping(my_socket, addr, my_id, timeout, family)
-    delay = await receive_one_ping(my_socket, my_id, timeout)
+    await _send_one_ping(my_socket, addr, my_id, timeout, family)
+    delay = await _receive_one_ping(my_socket, my_id, timeout)
     my_socket.close()
 
     return delay
@@ -310,5 +310,46 @@ async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
             break
 
         if delay is not None:
-            delay *= 1000
             logger.info("%s get ping in %0.4fms" % (dest_addr, delay))
+
+
+async def _do_multiping(dest_addr, timeout=5, family=None):
+    """
+    Execute the ping of a single address for multiping function
+    """
+
+    try:
+        delay = await ping(dest_addr, timeout, family)
+        return (dest_addr, delay)
+
+    except TimeoutError:
+        return (dest_addr, 'TimeoutError')
+
+
+async def _multiping_sem(dest_addr, sem, timeout=5, family=None):
+    """
+    run the multiping with asyncio.Semaphore limit of 255
+    """
+    
+    async with sem:
+        return await _do_ping_sem(dest_addr, timeout, family)
+
+
+async def multiping(dest_addr, timeout=5, family=None):
+    """
+    Returns tuple (dest_addr, delay) for each ip address
+    or domain submitted in a list. Will return 
+    (dest_addr, 'TimeoutError') if ping times out.
+    """
+
+    # limit because of select()
+    if len(dest_addr) > 255:
+        sem = asyncio.Semaphore(255)
+        tasks = [_multiping_sem(x, sem, timeout, family) for x in dest_addr]
+    
+    # no limit if pinging less than 255 addresses
+    else:
+        tasks = [_do_multiping(x, timeout, family) for x in dest_addr]
+
+    return await asyncio.gather(*tasks)
+    

@@ -4,13 +4,13 @@ from setuptools import setup
 setup(
     name="aioping",
     packages=["aioping"],
-    version="0.3.1",
+    version="0.4.1",
     install_requires=["async_timeout", "aiodns"],
     description="Asyncio ping implementation",
     author="Anton Belousov",
     author_email="anton@stellarbit.com",
     url="https://github.com/stellarbit/aioping",
-    download_url="https://github.com/stellarbit/aioping/tarball/0.3.1",
+    download_url="https://github.com/stellarbit/aioping/tarball/0.4.1",
     keywords=["network", "icmp", "ping", "asyncio"],
     classifiers=[
         "Development Status :: 4 - Beta",

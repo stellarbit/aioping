@@ -1,6 +1,6 @@
 from unittest import TestCase
 import asyncio
-from aioping import verbose_ping, ping
+from aioping import verbose_ping, ping, multiping
 import logging
 import socket
 
