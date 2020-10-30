@@ -4,7 +4,7 @@ from setuptools import setup
 setup(
     name="aioping",
     packages=["aioping"],
-    version="0.4.0",
+    version="0.4.1",
     install_requires=["async_timeout", "aiodns"],
     description="Asyncio ping implementation",
     author="Anton Belousov",
