@@ -289,24 +289,25 @@ async def ping(dest_addr, timeout=10, family=None):
     return delay
 
 
-async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
+async def verbose_ping(dest_addr, timeout=2, count=3, family=None, stop_ping=False):
     """
     Send >count< ping to >dest_addr< with the given >timeout< and display
-    the result.
+    the result. Set stop_ping to True, if you want to check just 1 echo reply from
+    several requests.
     :param dest_addr:
     :param timeout:
     :param count:
     :param family:
+    :param stop_ping:
     """
     for i in range(count):
         delay = None
         result = ''
         try:
             delay = await ping(dest_addr, timeout, family)
-            if delay:
-                result = True
-            else:
-                result = False
+            result = True
+            if stop_ping:
+                break
         except TimeoutError as e:
             result = False
             logger.error("%s timed out after %ss" % (dest_addr, timeout))
