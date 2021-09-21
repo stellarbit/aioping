@@ -300,15 +300,22 @@ async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
     """
     for i in range(count):
         delay = None
-
+        result = ''
         try:
             delay = await ping(dest_addr, timeout, family)
+            if delay:
+                result = True
+            else:
+                result = False
         except TimeoutError as e:
+            result = False
             logger.error("%s timed out after %ss" % (dest_addr, timeout))
         except Exception as e:
             logger.error("%s failed: %s" % (dest_addr, str(e)))
+            result = False
             break
 
         if delay is not None:
             delay *= 1000
             logger.info("%s get ping in %0.4fms" % (dest_addr, delay))
+    return result
