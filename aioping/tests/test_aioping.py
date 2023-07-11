@@ -11,15 +11,16 @@ class TestAioping(TestCase):
         logging.basicConfig(level=logging.INFO)
 
     def test_verbose_ping(self):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
         tasks = [
-            asyncio.ensure_future(verbose_ping("a-test-url-taht-is-not-available.com")),
-            asyncio.ensure_future(verbose_ping("192.168.1.111")),
-            asyncio.ensure_future(verbose_ping("heise.de", family=socket.AddressFamily.AF_INET)),
-            asyncio.ensure_future(verbose_ping("google.com", family=socket.AddressFamily.AF_INET)),
-            asyncio.ensure_future(verbose_ping("heise.de", family=socket.AddressFamily.AF_INET6)),
-            asyncio.ensure_future(verbose_ping("google.com", family=socket.AddressFamily.AF_INET6))
+            asyncio.ensure_future(verbose_ping("a-test-url-taht-is-not-available.com"), loop=loop),
+            asyncio.ensure_future(verbose_ping("192.168.1.111"), loop=loop),
+            asyncio.ensure_future(verbose_ping("heise.de", family=socket.AddressFamily.AF_INET), loop=loop),
+            asyncio.ensure_future(verbose_ping("google.com", family=socket.AddressFamily.AF_INET), loop=loop),
+            asyncio.ensure_future(verbose_ping("heise.de", family=socket.AddressFamily.AF_INET6), loop=loop),
+            asyncio.ensure_future(verbose_ping("google.com", family=socket.AddressFamily.AF_INET6), loop=loop)
         ]
 
         loop.run_until_complete(asyncio.gather(*tasks))
@@ -32,10 +33,12 @@ class TestAioping(TestCase):
             print("%s timed out" % host)
 
     def test_many_pings(self):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         tasks = []
 
         for i in range(255):
-            tasks.append(asyncio.ensure_future(self._do_ping("192.168.0.%s" % i)))
+            tasks.append(asyncio.ensure_future(self._do_ping("192.168.0.%s" % i), loop=loop))
 
         loop.run_until_complete(asyncio.gather(*tasks))
