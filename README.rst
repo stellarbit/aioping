@@ -93,6 +93,10 @@ Credits
   - https://github.com/hergla
   - https://github.com/hanieljgoertz
   - https://github.com/Crypto-Spartan
+  - https://github.com/liordot
+  - https://github.com/dkaplan1
+  - https://github.com/haron
+  - https://github.com/matteomartelli
 
 
 License
