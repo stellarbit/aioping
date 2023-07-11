@@ -30,8 +30,7 @@ root is allowed to send ICMP packets:
     import logging
 
     logging.basicConfig(level=logging.INFO)     # or logging.DEBUG
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(aioping.verbose_ping("google.com"))
+    asyncio.run(aioping.verbose_ping("google.com"))
 
 Alternatively, you can call a ping function, which returns a
 ping delay in milliseconds or throws an exception in case of
@@ -50,8 +49,7 @@ error:
         except TimeoutError:
             print("Timed out")
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(do_ping("google.com"))
+    asyncio.run(do_ping("google.com"))
 
 Methods
 -------

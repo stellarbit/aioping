@@ -147,7 +147,7 @@ async def receive_one_ping(my_socket, id_, timeout):
     loop = asyncio.get_event_loop()
 
     try:
-        with async_timeout.timeout(timeout):
+        async with async_timeout.timeout(timeout):
             while True:
                 rec_packet = await loop.sock_recv(my_socket, 1024)
                 time_received = default_timer()
