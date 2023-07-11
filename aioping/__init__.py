@@ -86,6 +86,8 @@ import time
 import functools
 import uuid
 import random
+import platform
+import os
 
 logger = logging.getLogger("aioping")
 default_timer = time.perf_counter
@@ -150,9 +152,17 @@ async def receive_one_ping(my_socket, id_, timeout):
         async with async_timeout.timeout(timeout):
             while True:
                 rec_packet = await loop.sock_recv(my_socket, 1024)
+
+                # No IP Header when unpriviledged on Linux
+                has_ip_header = (
+                    (os.name != "posix")
+                    or (platform.system() == "Darwin")
+                    or (my_socket.type == socket.SOCK_RAW)
+                )
+
                 time_received = default_timer()
 
-                if my_socket.family == socket.AddressFamily.AF_INET:
+                if my_socket.family == socket.AddressFamily.AF_INET and has_ip_header:
                     offset = 20
                 else:
                     offset = 0
@@ -165,6 +175,11 @@ async def receive_one_ping(my_socket, id_, timeout):
 
                 if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
                     continue
+
+                if not has_ip_header:  
+                    # When unprivileged on Linux, ICMP ID is rewrited by kernel
+                    # According to https://stackoverflow.com/a/14023878/4528364
+                    id_ = int.from_bytes(my_socket.getsockname()[1].to_bytes(2, "big"), "little")
 
                 if packet_id == id_:
                     data = rec_packet[offset + 8:offset + 8 + struct.calcsize("d")]
@@ -264,21 +279,16 @@ async def ping(dest_addr, timeout=10, family=None):
 
     try:
         my_socket = socket.socket(family, socket.SOCK_RAW, icmp)
-        my_socket.setblocking(False)
 
     except OSError as e:
-        msg = e.strerror
-
         if e.errno == 1:
-            # Operation not permitted
-            msg += (
-                " - Note that ICMP messages can only be sent from processes"
-                " running as root."
-            )
+            # Operation not permitted, using SOCK_DGRAM instead:
+            my_socket = socket.socket(family, socket.SOCK_DGRAM, icmp)
+            logger.debug("Error using socket.SOCK_RAW: '%s'. Using socket.SOCK_DGRAM instead", e.strerror)
+        else:
+            raise
 
-            raise OSError(msg)
-
-        raise
+    my_socket.setblocking(False)
 
     my_id = uuid.uuid4().int & 0xFFFF
 
