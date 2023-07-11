@@ -160,7 +160,7 @@ async def receive_one_ping(my_socket, id_, timeout):
                 icmp_header = rec_packet[offset:offset + 8]
 
                 type, code, checksum, packet_id, sequence = struct.unpack(
-                    "bbHHh", icmp_header
+                    "BbHHh", icmp_header
                 )
 
                 if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
