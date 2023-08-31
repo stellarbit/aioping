@@ -107,36 +107,22 @@ proto_icmp6 = socket.getprotobyname("ipv6-icmp")
 
 
 def checksum(buffer):
-    """
-    I'm not too confident that this is right but testing seems
-    to suggest that it gives the same answers as in_cksum in ping.c
-    :param buffer:
-    :return:
-    """
-    sum = 0
-    count_to = (len(buffer) / 2) * 2
-    count = 0
+    length = len(buffer)
+    csum = 0
+    i = 0
+    while length > 1:
+        csum += buffer[i + 1] + (buffer[i + 0] << 8)
+        csum &= 0xffff_ffff
+        length -= 2
+        i += 2
 
-    while count < count_to:
-        this_val = buffer[count + 1] * 256 + buffer[count]
-        sum += this_val
-        sum &= 0xffffffff # Necessary?
-        count += 2
+    if i < len(buffer):
+        csum += buffer[-1]
+        csum &= 0xffff_ffff
 
-    if count_to < len(buffer):
-        sum += buffer[len(buffer) - 1]
-        sum &= 0xffffffff # Necessary?
-
-    sum = (sum >> 16) + (sum & 0xffff)
-    sum += sum >> 16
-    answer = ~sum
-    answer &= 0xffff
-
-    # Swap bytes. Bugger me if I know why.
-    answer = answer >> 8 | (answer << 8 & 0xff00)
-
-    return answer
-
+    csum = (csum >> 16) + (csum & 0xffff)  # Fold high 16 bits
+    csum += (csum >> 16)
+    return ~csum & 0xffff
 
 async def receive_one_ping(my_socket, id_, timeout):
     """
@@ -170,14 +156,14 @@ async def receive_one_ping(my_socket, id_, timeout):
                 icmp_header = rec_packet[offset:offset + 8]
 
                 type, code, checksum, packet_id, sequence = struct.unpack(
-                    "BBHHH", icmp_header
+                    "!BBHHH", icmp_header
                 )
 
                 if type != ICMP_ECHO_REPLY and type != ICMP6_ECHO_REPLY:
                     continue
 
                 if not has_ip_header:  
-                    # When unprivileged on Linux, ICMP ID is rewrited by kernel
+                    # When unprivileged on Linux, ICMP ID is rewrote by the kernel
                     # According to https://stackoverflow.com/a/14023878/4528364
                     id_ = int.from_bytes(my_socket.getsockname()[1].to_bytes(2, "big"), "little")
 
@@ -224,7 +210,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     my_checksum = 0
 
     # Make a dummy header with a 0 checksum.
-    header = struct.pack("BBHHH", icmp_type, 0, my_checksum, id_, 1)
+    header = struct.pack("!BBHHH", icmp_type, 0, my_checksum, id_, 1)
     bytes_in_double = struct.calcsize("d")
     data = (192 - bytes_in_double) * "Q"
     data = struct.pack("d", default_timer()) + data.encode("ascii")
@@ -235,7 +221,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     # Now that we have the right checksum, we put that in. It's just easier
     # to make up a new header than to stuff it into the dummy.
     header = struct.pack(
-        "BBHHH", icmp_type, 0, socket.htons(my_checksum), id_, 1
+        "!BBHHH", icmp_type, 0, my_checksum, id_, 1
     )
     packet = header + data
 
