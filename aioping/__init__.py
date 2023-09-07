@@ -139,7 +139,7 @@ async def receive_one_ping(my_socket, id_, timeout):
             while True:
                 rec_packet = await loop.sock_recv(my_socket, 1024)
 
-                # No IP Header when unpriviledged on Linux
+                # No IP Header when unprivileged on Linux
                 has_ip_header = (
                     (os.name != "posix")
                     or (platform.system() == "Darwin")
@@ -163,7 +163,7 @@ async def receive_one_ping(my_socket, id_, timeout):
                     continue
 
                 if not has_ip_header:  
-                    # When unprivileged on Linux, ICMP ID is rewrote by the kernel
+                    # When unprivileged on Linux, ICMP ID is rewritten by the kernel
                     # According to https://stackoverflow.com/a/14023878/4528364
                     id_ = int.from_bytes(my_socket.getsockname()[1].to_bytes(2, "big"), "little")
 
