@@ -88,7 +88,7 @@ import uuid
 import random
 import platform
 import os
-import typing
+from typing import Optional, Tuple, Union
 
 logger = logging.getLogger("aioping")
 default_timer = time.perf_counter
@@ -105,6 +105,8 @@ ICMP6_ECHO_REPLY = 129
 
 proto_icmp = socket.getprotobyname("icmp")
 proto_icmp6 = socket.getprotobyname("ipv6-icmp")
+
+SocketAddress = Union[Tuple[str, int], Tuple[str, int, int, int]]
 
 
 def checksum(buffer: bytes) -> int:
@@ -196,9 +198,9 @@ async def receive_one_ping(my_socket: socket.socket, id_: int, timeout: float) -
         raise TimeoutError("Ping timeout")
 
 
-def sendto_ready(packet: bytes, socket: socket.socket, future: asyncio.Future, dest: socket._Address):
+def sendto_ready(packet: bytes, socket: socket.socket, future: asyncio.Future, dest_addr: SocketAddress):
     try:
-        socket.sendto(packet, dest)
+        socket.sendto(packet, dest_addr)
     except (BlockingIOError, InterruptedError):
         return  # The callback will be retried
     except Exception as exc:
@@ -209,7 +211,7 @@ def sendto_ready(packet: bytes, socket: socket.socket, future: asyncio.Future, d
         future.set_result(None)
 
 
-async def send_one_ping(my_socket: socket.socket, dest_addr: socket._Address, id_: int, family: typing.Optional[socket.AddressFamily] = None):
+async def send_one_ping(my_socket: socket.socket, dest_addr: SocketAddress, id_: int, family: Optional[socket.AddressFamily] = None):
     """
     Send one ping to the given >dest_addr<.
     :param my_socket:
@@ -240,13 +242,13 @@ async def send_one_ping(my_socket: socket.socket, dest_addr: socket._Address, id
     packet = header + data
 
     future = asyncio.get_event_loop().create_future()
-    callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest=dest_addr, future=future)
+    callback = functools.partial(sendto_ready, packet=packet, socket=my_socket, dest_addr=dest_addr, future=future)
     asyncio.get_event_loop().add_writer(my_socket, callback)
 
     await future
 
 
-async def ping(dest_addr: str | bytes, timeout=10.0, family: typing.Optional[socket.AddressFamily] = None) -> float:
+async def ping(dest_addr: Union[str, bytes], timeout=10.0, family: Optional[socket.AddressFamily] = None) -> float:
     """
     Returns either the delay (in seconds) or raises an exception.
     :param dest_addr:
@@ -299,7 +301,7 @@ async def ping(dest_addr: str | bytes, timeout=10.0, family: typing.Optional[soc
     return delay
 
 
-async def verbose_ping(dest_addr: str | bytes, timeout=2.0, count=3, family: typing.Union[socket.AddressFamily, None] = None):
+async def verbose_ping(dest_addr: Union[str, bytes], timeout=2.0, count=3, family: Optional[socket.AddressFamily] = None):
     """
     Send >count< ping to >dest_addr< with the given >timeout< and display
     the result.
