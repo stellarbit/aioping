@@ -141,7 +141,7 @@ def checksum(buffer: bytes) -> int:
     return answer
 
 
-async def receive_one_ping(my_socket: socket.socket, id_: int, timeout: float) -> float:
+async def receive_one_ping(my_socket: socket.socket, id_: int, timeout: Union[int, float]) -> float:
     """
     receive the ping from the socket.
     :param my_socket:
@@ -248,7 +248,7 @@ async def send_one_ping(my_socket: socket.socket, dest_addr: SocketAddress, id_:
     await future
 
 
-async def ping(dest_addr: Union[str, bytes], timeout=10.0, family: Optional[socket.AddressFamily] = None) -> float:
+async def ping(dest_addr: Union[str, bytes], timeout: Union[int, float] = 10.0, family: Optional[socket.AddressFamily] = None) -> float:
     """
     Returns either the delay (in seconds) or raises an exception.
     :param dest_addr:
