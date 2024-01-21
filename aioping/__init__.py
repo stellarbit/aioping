@@ -246,7 +246,7 @@ async def send_one_ping(my_socket, dest_addr, id_, timeout, family):
     await future
 
 
-async def ping(dest_addr, timeout=10, family=None):
+async def ping(dest_addr, timeout=10, family=None, interface=None):
     """
     Returns either the delay (in seconds) or raises an exception.
     :param dest_addr:
@@ -288,6 +288,9 @@ async def ping(dest_addr, timeout=10, family=None):
         else:
             raise
 
+    if interface:
+        my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, interface.encode())
+
     my_socket.setblocking(False)
 
     my_id = uuid.uuid4().int & 0xFFFF
@@ -299,7 +302,7 @@ async def ping(dest_addr, timeout=10, family=None):
     return delay
 
 
-async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
+async def verbose_ping(dest_addr, timeout=2, count=3, family=None, interface=None):
     """
     Send >count< ping to >dest_addr< with the given >timeout< and display
     the result.
@@ -312,7 +315,7 @@ async def verbose_ping(dest_addr, timeout=2, count=3, family=None):
         delay = None
 
         try:
-            delay = await ping(dest_addr, timeout, family)
+            delay = await ping(dest_addr, timeout, family, interface)
         except TimeoutError as e:
             logger.error("%s timed out after %ss" % (dest_addr, timeout))
         except Exception as e:
